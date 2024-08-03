@@ -3,12 +3,14 @@ package main
 import (
 	"bytes"
 	"errors"
-	"fmt"
-	"image/jpeg"
+	"image"
 	"image/png"
+	"io"
 	"net/http"
 	"net/url"
+	"path/filepath"
 
+	"github.com/chai2010/webp"
 	"github.com/gin-gonic/gin"
 )
 
@@ -29,17 +31,42 @@ func main() {
 			return
 		}
 
-		// Convert to png
-		fileBytes, err := file.Open()
-		if err != nil {
-			c.String(http.StatusBadRequest, "open file err: %s", err.Error())
+		filename := filepath.Base(file.Filename)
+		if err := c.SaveUploadedFile(file, filename); err != nil {
+			c.String(http.StatusBadRequest, "upload file err: %s", err.Error())
 			return
 		}
-		defer fileBytes.Close()
 
-		imgBytes := new(bytes.Buffer)
-		imgBytes.ReadFrom(fileBytes)
-		imgBytes, err = imgToPng(imgBytes.Bytes(), err)
+		// check syntax of the filename, it should be a webp file
+		// if not, convert to webp
+		if filepath.Ext(filename) != ".webp" {
+			// Convert to webp
+			imageBytes, err := file.Open()
+			if err != nil {
+				c.String(http.StatusBadRequest, "unable to open file: %s", err.Error())
+				return
+			}
+			defer imageBytes.Close()
+
+			// Read the file content
+			fileContent, err := io.ReadAll(imageBytes)
+			if err != nil {
+				c.String(http.StatusBadRequest, "unable to read file: %s", err.Error())
+				return
+			}
+
+			img, err := convertToWebP(fileContent)
+			if err != nil {
+				c.String(http.StatusBadRequest, "unable to convert to webp: %s", err.Error())
+				return
+			}
+
+			// Save the webp file
+			if err := webp.Save(filename, img, &webp.Options{Lossless: true}); err != nil {
+				c.String(http.StatusBadRequest, "unable to save webp: %s", err.Error())
+				return
+			}
+		}
 
 		urlGen := url.URL{
 			Scheme: "https",
@@ -47,50 +74,31 @@ func main() {
 			Path:   "/" + filename,
 		}
 
-		c.String(http.StatusOK, "SUCCESS: %s/%s", urlGen)
+		c.String(http.StatusOK, "SUCCESS: %s/%s", urlGen, file.Filename)
 	})
 
 	router.Run(":8080")
 }
 
-// imgToPng converts an image to png
-func imgToPng(imageBytes []byte, err error) ([]byte, error) {
+func convertToWebP(imageBytes []byte) (image.Image, error) {
+	var buf bytes.Buffer
 	contentType := http.DetectContentType(imageBytes)
+	imgReader := bytes.NewReader(imageBytes)
+	// strippedName := filepath.Base(name)
+	// convertedName := strippedName[0 : len(strippedName)-len(filepath.Ext(strippedName))] // Remove file extension
 
 	switch contentType {
 	case "image/png":
-	case "image/jpeg":
-		img, err := jpeg.Decode(bytes.NewReader(imageBytes))
+		img, err := png.Decode(imgReader)
 		if err != nil {
-			return nil, errors.Join(err, errors.New("unable to decode jpeg"))
+			return nil, errors.Join(err, errors.New("unable to decode png"))
 		}
 
-		buf := new(bytes.Buffer)
-		if err := png.Encode(buf, img); err != nil {
-			return nil, errors.Join(err, errors.New("unable to encode png"))
+		if err = webp.Encode(&buf, img, &webp.Options{Lossless: true}); err != nil {
+			return nil, errors.Join(err, errors.New("unable to encode webp"))
 		}
 
-		return buf.Bytes(), nil
+		return img, nil
 	}
-
-	return nil, fmt.Errorf("unable to convert %#v to png", contentType)
-}
-
-// gets image from multipart form upload
-func getImageFromForm(c *gin.Context) ([]byte, error) {
-	file, err := c.FormFile("file")
-	if err != nil {
-		return nil, err
-	}
-
-	fileBytes, err := file.Open()
-	if err != nil {
-		return nil, err
-	}
-	defer fileBytes.Close()
-
-	buf := new(bytes.Buffer)
-	buf.ReadFrom(fileBytes)
-
-	return buf.Bytes(), nil
+	return nil, nil
 }
