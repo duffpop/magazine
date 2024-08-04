@@ -124,15 +124,9 @@ func wordGen() string {
 
 	var word string
 
-	for i := 0; i < 1; i++ {
-		word += scales[rand.Intn(len(scales))]
-	}
-
+	word += scales[rand.Intn(len(scales))]
 	word += "-"
-
-	for i := 0; i < 1; i++ {
-		word += tails[rand.Intn(len(scales))]
-	}
+	word += tails[rand.Intn(len(scales))]
 
 	return word
 }
