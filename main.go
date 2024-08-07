@@ -73,13 +73,11 @@ func main() {
 				return
 			}
 		}
-
 		urlGen := url.URL{
 			Scheme: "https",
 			Host:   host,
 			Path:   "/" + filename,
 		}
-
 		c.String(http.StatusOK, "SUCCESS: %s", urlGen.String())
 	})
 
