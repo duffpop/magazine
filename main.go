@@ -18,13 +18,24 @@ import (
 	"tailscale.com/words"
 )
 
-var host = "img.hayden.lol"
+var (
+	host = "img.hayden.lol"
+	//expectedToken = os.Getenv("EXPECTED_TOKEN")
+	expectedToken = "hello"
+)
 
 func main() {
 	router := gin.Default()
 
 	// Set a lower memory limit for multipart forms (default is 32 MiB)
 	router.MaxMultipartMemory = 8 << 20 // 8 MiB
+
+	if expectedToken == "" {
+		panic("EXPECTED_TOKEN environment variable is not set") // Fail fast if the token is not set
+	}
+
+	// Apply the token validation middleware globally or to the specific route
+	router.Use(tokenValidationMiddleware)
 
 	router.POST("/upload", func(c *gin.Context) {
 		// Source
@@ -136,4 +147,19 @@ func wordGen() string {
 	word += tails[rand.Intn(len(tails))]
 
 	return word
+}
+
+// tokenValidationMiddleware is a middleware function for validating the token present in the query parameters.
+func tokenValidationMiddleware(c *gin.Context) {
+	token := c.Query("token")
+
+	// Check if the token is present and valid
+	if token == "" || token != expectedToken {
+		c.String(http.StatusUnauthorized, "ERR: invalid or missing token")
+		c.Abort()
+		return
+	}
+
+	// If the token is valid, proceed to the next handler
+	c.Next()
 }
