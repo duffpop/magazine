@@ -8,6 +8,7 @@ import (
 	"image/png"
 	"io"
 	"math/rand"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -17,13 +18,13 @@ import (
 	"tailscale.com/words"
 )
 
-var host string = "img.hayden.lol"
+var host = "img.hayden.lol"
 
 func main() {
 	router := gin.Default()
 
 	// Set a lower memory limit for multipart forms (default is 32 MiB)
-	// router.MaxMultipartMemory = 8 << 20 // 8 MiB
+	router.MaxMultipartMemory = 8 << 20 // 8 MiB
 
 	router.POST("/upload", func(c *gin.Context) {
 		// Source
@@ -42,7 +43,13 @@ func main() {
 			c.String(http.StatusBadRequest, "ERR: unable to open file: %s", err.Error())
 			return
 		}
-		defer imageBytes.Close()
+
+		defer func(imageBytes multipart.File) {
+			err := imageBytes.Close()
+			if err != nil {
+				c.String(http.StatusBadRequest, "ERR: unable to close file: %s", err.Error())
+			}
+		}(imageBytes)
 
 		// Read the file content
 		fileContent, err := io.ReadAll(imageBytes)
@@ -74,14 +81,16 @@ func main() {
 			}
 		}
 		urlGen := url.URL{
-			Scheme: "https",
-			Host:   host,
-			Path:   "/" + filename,
+			Scheme: "https", Host: host,
+			Path: "/" + filename,
 		}
 		c.String(http.StatusOK, "SUCCESS: %s", urlGen.String())
 	})
 
-	router.Run(":8080")
+	err := router.Run(":8080")
+	if err != nil {
+		return
+	}
 }
 
 func convertToWebP(imageBytes []byte) (image.Image, error) {
@@ -124,7 +133,7 @@ func wordGen() string {
 
 	word += scales[rand.Intn(len(scales))]
 	word += "-"
-	word += tails[rand.Intn(len(scales))]
+	word += tails[rand.Intn(len(tails))]
 
 	return word
 }
