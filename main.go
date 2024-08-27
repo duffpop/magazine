@@ -21,6 +21,10 @@ func main() {
 	// Set a lower memory limit for multipart forms (default is 32 MiB)
 	router.MaxMultipartMemory = 8 << 20 // 8 MiB
 
+	if host == "" {
+		panic("HOSTNAME environment variable is not set") // Fail fast if the host is not set
+	}
+
 	if expectedToken == "" {
 		panic("EXPECTED_TOKEN environment variable is not set") // Fail fast if the token is not set
 	}
