@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	host          = "img.hayden.lol"
+	host          = os.Getenv("HOSTNAME")
 	expectedToken = os.Getenv("EXPECTED_TOKEN")
 )
 
